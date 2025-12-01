@@ -13,6 +13,7 @@ COMPOSE_FILE_DEV = docker/compose.development.yaml
 COMPOSE_FILE_PROD = docker/compose.production.yaml
 DC_DEV = docker compose -f $(COMPOSE_FILE_DEV) --env-file .env
 DC_PROD = docker compose -f $(COMPOSE_FILE_PROD) --env-file .env
+SHELL := /bin/bash
 
 # Select compose command based on MODE
 ifeq ($(MODE),prod)
