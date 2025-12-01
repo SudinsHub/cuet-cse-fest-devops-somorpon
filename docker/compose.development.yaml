@@ -1,6 +1,89 @@
-# services:
-  # backend:
+version: '3.8'
 
-  # gateway:
+services:
+  # MongoDB Database
+  mongo:
+    image: mongo:7-jammy
+    container_name: dev-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    networks:
+      - app-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
-  # mongo:
+  # Backend Service
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.dev
+    container_name: dev-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      BACKEND_PORT: ${BACKEND_PORT}
+      MONGO_URI: ${MONGO_URI}
+      MONGO_DATABASE: ${MONGO_DATABASE}
+    volumes:
+      # Mount source code for hot-reload
+      - ../backend/src:/app/src:ro
+      - ../backend/package.json:/app/package.json:ro
+      - ../backend/tsconfig.json:/app/tsconfig.json:ro
+      # Use named volume for node_modules to avoid conflicts
+      - backend-node-modules:/app/node_modules
+    networks:
+      - app-network
+    depends_on:
+      mongo:
+        condition: service_healthy
+    # Backend is NOT exposed to host - only accessible through gateway
+
+  # Gateway Service
+  gateway:
+    build:
+      context: ../gateway
+      dockerfile: Dockerfile.dev
+    container_name: dev-gateway
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      GATEWAY_PORT: ${GATEWAY_PORT}
+      BACKEND_URL: http://backend:${BACKEND_PORT}
+    volumes:
+      # Mount source code for hot-reload
+      - ../gateway/src:/app/src:ro
+      - ../gateway/package.json:/app/package.json:ro
+      # Use named volume for node_modules
+      - gateway-node-modules:/app/node_modules
+    ports:
+      # ONLY gateway is exposed to host
+      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
+    networks:
+      - app-network
+    depends_on:
+      - backend
+
+networks:
+  app-network:
+    driver: bridge
+    name: dev-app-network
+
+volumes:
+  mongo-data:
+    name: dev-mongo-data
+  mongo-config:
+    name: dev-mongo-config
+  backend-node-modules:
+    name: dev-backend-node-modules
+  gateway-node-modules:
+    name: dev-gateway-node-modules
+

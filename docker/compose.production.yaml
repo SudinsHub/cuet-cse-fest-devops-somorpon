@@ -1,6 +1,108 @@
-# services:
-  # backend:
+version: '3.8'
 
-  # gateway:
+services:
+  # MongoDB Database
+  mongo:
+    image: mongo:7-jammy
+    container_name: prod-mongo
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    networks:
+      - app-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    security_opt:
+      - no-new-privileges:true
 
-  # mongo:
+  # Backend Service
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: prod-backend
+    restart: always
+    environment:
+      NODE_ENV: production
+      BACKEND_PORT: ${BACKEND_PORT}
+      MONGO_URI: ${MONGO_URI}
+      MONGO_DATABASE: ${MONGO_DATABASE}
+    networks:
+      - app-network
+    depends_on:
+      mongo:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # Need write access for logs
+    tmpfs:
+      - /tmp
+    # Backend is NOT exposed to host - only accessible through gateway
+
+  # Gateway Service
+  gateway:
+    build:
+      context: ../gateway
+      dockerfile: Dockerfile
+    container_name: prod-gateway
+    restart: always
+    environment:
+      NODE_ENV: production
+      GATEWAY_PORT: ${GATEWAY_PORT}
+      BACKEND_URL: http://backend:${BACKEND_PORT}
+    ports:
+      # ONLY gateway is exposed to host
+      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
+    networks:
+      - app-network
+    depends_on:
+      - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    security_opt:
+      - no-new-privileges:true
+    read_only: false  # Need write access for logs
+    tmpfs:
+      - /tmp
+
+networks:
+  app-network:
+    driver: bridge
+    name: prod-app-network
+
+volumes:
+  mongo-data:
+    name: prod-mongo-data
+  mongo-config:
+    name: prod-mongo-config
+
