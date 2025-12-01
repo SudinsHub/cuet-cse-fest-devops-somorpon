@@ -1,3 +1,17 @@
+# Running the Project
+To run the project in development mode:
+
+```bash
+make dev-build
+make dev-up   
+```
+To run the project in production mode:
+```bash
+make prod-build
+make prod-up   
+```
+
+
 # Hackathon Challenge
 
 Your challenge is to take this simple e-commerce backend and turn it into a fully containerized microservices setup using Docker and solid DevOps practices.
